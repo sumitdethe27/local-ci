@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .status {
+            margin-top: 20px;
+        }
+        .status .stage {
+            margin-bottom: 20px;
+        }
+        .status .progress {
+            width: 100%;
+            height: 5px;
+            background-color: #ddd;
+            border-radius: 4px;
+            position: relative;
+        }
+        .status .progress span {
+            display: block;
+            height: 100%;
+            background-color: #007bff;
+            width: 0;
+            border-radius: 4px;
+            transition: width 0.4s;
+        }
+        .status .message {
+            font-size: 14px;
+            color: #333;
+        }
+        .status .success {
+            color: green;
+        }
+        .status .error {
+            color: red;
+        }
+        .image-tag {
+            margin-top: 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CI Tool</h1>
+        <form id="buildForm">
+            <div class="form-group">
+                <label for="repo_url">Repo URL:</label>
+                <input type="text" id="repo_url" name="repo_url" required>
+            </div>
+            <div class="form-group">
+                <label for="branch_name">Branch Name:</label>
+                <input type="text" id="branch_name" name="branch_name">
+            </div>
+            <button type="submit">Build and Push</button>
+        </form>
+        <div class="status" id="status">
+            <div id="cloneStage" class="stage">
+                <div class="progress"><span id="cloneProgress"></span></div>
+                <div class="message" id="cloneMessage">Cloning repository...</div>
+            </div>
+            <div id="buildStage" class="stage">
+                <div class="progress"><span id="buildProgress"></span></div>
+                <div class="message" id="buildMessage">Building Docker image...</div>
+            </div>
+            <div id="pushStage" class="stage">
+                <div class="progress"><span id="pushProgress"></span></div>
+                <div class="message" id="pushMessage">Pushing Docker image to ECR...</div>
+            </div>
+        </div>
+        <div id="imageTagContainer" class="image-tag">
+            <div id="imageTagMessage"></div>
+        </div>
+    </div>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+const socket = io('http://localhost:5000'); // or use your specific IP address
+
+        document.getElementById('buildForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            fetch('/build', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json()).then(data => {
+                if (data.status === 'success') {
+                    // Start listening for WebSocket messages
+                    socket.on('status', (data) => {
+                        const { stage, status, image_tag } = data;
+                        if (status.startsWith('Error:')) {
+                            showError(`${stage}Message`, status);
+                        } else {
+                            updateProgress(`${stage}Progress`, 100); // Set to 100% for completion
+                            document.getElementById(`${stage}Message`).textContent = status;
+                            document.getElementById(`${stage}Message`).classList.add('success');
+                            if (stage === 'push' && image_tag) {
+                                document.getElementById('imageTagMessage').textContent = `Docker image pushed: ${image_tag}`;
+                            }
+                        }
+                    });
+                } else {
+                    showError('pushMessage', data.message);
+                }
+            }).catch(error => {
+                showError('pushMessage', 'An unexpected error occurred');
+            });
+        });
+
+        function updateProgress(id, percent) {
+            const progress = document.getElementById(id);
+            progress.style.width = `${percent}%`;
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.add('error');
+        }
+    </script>
+</body>
+</html>
